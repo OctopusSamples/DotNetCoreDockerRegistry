@@ -142,7 +142,7 @@ namespace Controllers
             return Created("/v2/" + name + "/blobs/" + digest, "");
         }
 
-        [HttpHead("/v2/{name}/manifests/{reference}")]
+        [HttpHead("{name}/manifests/{reference}")]
         public IActionResult ManifestExists(string name, string reference)
         {
             var path = LayerPath + "\\" + name + "." + reference + ".json";
@@ -163,7 +163,7 @@ namespace Controllers
             return NotFound();
         }
 
-        [HttpGet("/v2/{name}/manifests/{reference}")]
+        [HttpGet("{name}/manifests/{reference}")]
         public async Task<IActionResult> GetManifest(string name, string reference)
         {
             var hash = reference.Split(":").Last();
@@ -194,7 +194,7 @@ namespace Controllers
             return NotFound();
         }
 
-        [HttpPut("/v2/{name}/manifests/{reference}")]
+        [HttpPut("{name}/manifests/{reference}")]
         public async Task<IActionResult> SaveManifest(string name, string reference)
         {
             var path = LayerPath + "\\" + name + "." + reference + ".json";
