@@ -12,7 +12,7 @@ namespace Controllers
     [Route("v2/")]
     public class DockerRegistry : ControllerBase
     {
-        private string LayerPath;
+        private readonly string LayerPath;
 
         public DockerRegistry()
         {
@@ -80,7 +80,7 @@ namespace Controllers
             if (System.IO.File.Exists(LayerPath + "\\" + hash))
             {
                 Response.Headers.Add("content-length", new FileInfo(path).Length.ToString());
-                using (var fs = new FileStream(path, FileMode.Open))
+                await using (var fs = new FileStream(path, FileMode.Open))
                 {
                     await fs.CopyToAsync(Response.Body);
                     return Ok();
@@ -107,11 +107,14 @@ namespace Controllers
         {
             var digest = Request.Query["digest"].FirstOrDefault();
             var start = Request.Headers["content-range"].FirstOrDefault()?.Split("-")[0] ?? "0";
-            using FileStream fs = System.IO.File.OpenWrite(LayerPath + "\\" + uuid);
-            fs.Seek(long.Parse(start), SeekOrigin.Begin);
-            await Request.Body.CopyToAsync(fs);
-
-            Response.Headers["range"] = "0-" + (fs.Position - 1);
+            await using (var fs = System.IO.File.OpenWrite(LayerPath + "\\" + uuid))
+            {
+                fs.Seek(long.Parse(start), SeekOrigin.Begin);
+                await Request.Body.CopyToAsync(fs);
+                
+                Response.Headers["range"] = "0-" + (fs.Position - 1);
+            }
+            
             Response.Headers["docker-upload-uuid"] = uuid;
             Response.Headers["location"] = $"/v2/{name}/blobs/uploads/{uuid}";
             Response.Headers["content-length"] = "0";
@@ -125,7 +128,7 @@ namespace Controllers
             if (Request.Headers["content-length"].First() != "0")
             {
                 var ranges = Request.Headers["content-range"].First().Split("-");
-                using FileStream fs = System.IO.File.OpenWrite(LayerPath + "\\" + uuid);
+                await using var fs = System.IO.File.OpenWrite(LayerPath + "\\" + uuid);
                 fs.Seek(long.Parse(ranges[0]), SeekOrigin.Begin);
                 await Request.Body.CopyToAsync(fs);
             }
@@ -180,7 +183,7 @@ namespace Controllers
                 Response.Headers.Add("content-type", mediaType);
                 Response.Headers.Add("content-length", new FileInfo(testedPath).Length.ToString());
 
-                using (var fs = new FileStream(testedPath, FileMode.Open))
+                await using (var fs = new FileStream(testedPath, FileMode.Open))
                 {
                     await fs.CopyToAsync(Response.Body);
                 }
@@ -199,7 +202,7 @@ namespace Controllers
             var hash = Sha256Hash(path);
             Response.Headers.Add("docker-content-digest", "sha256:" + hash);
 
-            using (FileStream fs = System.IO.File.OpenWrite(path))
+            await using (var fs = System.IO.File.OpenWrite(path))
             {
                 await Request.Body.CopyToAsync(fs);
             }
