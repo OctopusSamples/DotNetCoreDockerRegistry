@@ -12,9 +12,9 @@ namespace Controllers
     [Route("v2/")]
     public class DockerRegistry : ControllerBase
     {
-        private readonly string LayerPath;
+        private static readonly string LayerPath;
 
-        public DockerRegistry()
+        static DockerRegistry()
         {
             LayerPath = GetTemporaryDirectory();
             Console.Out.WriteLine($"Saving artifacts to {LayerPath}");
@@ -101,7 +101,8 @@ namespace Controllers
             Response.Headers.Add("docker-upload-uuid", guid);
             return Accepted();
         }
-
+        
+        [DisableRequestSizeLimit] 
         [HttpPatch("{name}/blobs/uploads/{uuid}")]
         public async Task<IActionResult> Upload(string name, string uuid)
         {
@@ -199,13 +200,13 @@ namespace Controllers
         {
             var path = LayerPath + "\\" + name + "." + reference + ".json";
 
-            var hash = Sha256Hash(path);
-            Response.Headers.Add("docker-content-digest", "sha256:" + hash);
-
             await using (var fs = System.IO.File.OpenWrite(path))
             {
                 await Request.Body.CopyToAsync(fs);
             }
+            
+            var hash = Sha256Hash(path);
+            Response.Headers.Add("docker-content-digest", "sha256:" + hash);
 
             System.IO.File.Copy(path, LayerPath + "\\" + hash + ".json", true);
 
@@ -230,7 +231,7 @@ namespace Controllers
             return sb.ToString();
         }
         
-        string GetTemporaryDirectory()
+        static string GetTemporaryDirectory()
         {
             var tempFolder = Path.GetTempFileName();
             System.IO.File.Delete(tempFolder);
