@@ -61,9 +61,9 @@ namespace Controllers
         {
             var hash = digest.Split(":").Last();
 
-            if (System.IO.File.Exists(LayerPath + "\\" + hash))
+            if (System.IO.File.Exists(LayerPath + "/" + hash))
             {
-                Response.Headers.Add("content-length", new FileInfo(LayerPath + "\\" + hash).Length.ToString());
+                Response.Headers.Add("content-length", new FileInfo(LayerPath + "/" + hash).Length.ToString());
                 Response.Headers.Add("docker-content-digest", digest);
                 return Ok();
             }
@@ -75,9 +75,9 @@ namespace Controllers
         public async Task<IActionResult> GetLayer(string name, string digest)
         {
             var hash = digest.Split(":").Last();
-            var path = LayerPath + "\\" + hash;
+            var path = LayerPath + "/" + hash;
 
-            if (System.IO.File.Exists(LayerPath + "\\" + hash))
+            if (System.IO.File.Exists(LayerPath + "/" + hash))
             {
                 Response.Headers.Add("content-length", new FileInfo(path).Length.ToString());
                 await using (var fs = new FileStream(path, FileMode.Open))
@@ -108,7 +108,7 @@ namespace Controllers
         {
             var digest = Request.Query["digest"].FirstOrDefault();
             var start = Request.Headers["content-range"].FirstOrDefault()?.Split("-")[0] ?? "0";
-            await using (var fs = System.IO.File.OpenWrite(LayerPath + "\\" + uuid))
+            await using (var fs = System.IO.File.OpenWrite(LayerPath + "/" + uuid))
             {
                 fs.Seek(long.Parse(start), SeekOrigin.Begin);
                 await Request.Body.CopyToAsync(fs);
@@ -129,14 +129,14 @@ namespace Controllers
             if (Request.Headers["content-length"].First() != "0")
             {
                 var ranges = Request.Headers["content-range"].First().Split("-");
-                await using var fs = System.IO.File.OpenWrite(LayerPath + "\\" + uuid);
+                await using var fs = System.IO.File.OpenWrite(LayerPath + "/" + uuid);
                 fs.Seek(long.Parse(ranges[0]), SeekOrigin.Begin);
                 await Request.Body.CopyToAsync(fs);
             }
 
             var rawDigest = Request.Query["digest"];
             var digest = Request.Query["digest"].First().Split(":").Last();
-            System.IO.File.Move(LayerPath + "\\" + uuid, LayerPath + "\\" + digest);
+            System.IO.File.Move(LayerPath + "/" + uuid, LayerPath + "/" + digest);
             Response.Headers.Add("content-length", "0");
             Response.Headers.Add("docker-content-digest", rawDigest);
 
@@ -146,7 +146,7 @@ namespace Controllers
         [HttpHead("{name}/manifests/{reference}")]
         public IActionResult ManifestExists(string name, string reference)
         {
-            var path = LayerPath + "\\" + name + "." + reference + ".json";
+            var path = LayerPath + "/" + name + "." + reference + ".json";
 
             if (System.IO.File.Exists(path))
             {
@@ -168,8 +168,8 @@ namespace Controllers
         public async Task<IActionResult> GetManifest(string name, string reference)
         {
             var hash = reference.Split(":").Last();
-            var path = LayerPath + "\\" + name + "." + reference + ".json";
-            var hashPath = LayerPath + "\\" + hash + ".json";
+            var path = LayerPath + "/" + name + "." + reference + ".json";
+            var hashPath = LayerPath + "/" + hash + ".json";
             var testedPath = System.IO.File.Exists(path) ? path :
                 System.IO.File.Exists(hashPath) ? hashPath :
                 null;
@@ -198,7 +198,7 @@ namespace Controllers
         [HttpPut("{name}/manifests/{reference}")]
         public async Task<IActionResult> SaveManifest(string name, string reference)
         {
-            var path = LayerPath + "\\" + name + "." + reference + ".json";
+            var path = LayerPath + "/" + name + "." + reference + ".json";
 
             await using (var fs = System.IO.File.OpenWrite(path))
             {
@@ -208,7 +208,7 @@ namespace Controllers
             var hash = Sha256Hash(path);
             Response.Headers.Add("docker-content-digest", "sha256:" + hash);
 
-            System.IO.File.Copy(path, LayerPath + "\\" + hash + ".json", true);
+            System.IO.File.Copy(path, LayerPath + "/" + hash + ".json", true);
 
             return Created($"/v2/{name}/manifests/{reference}", null);
         }
