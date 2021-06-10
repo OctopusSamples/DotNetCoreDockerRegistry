@@ -19,6 +19,15 @@ namespace Controllers
             LayerPath = GetTemporaryDirectory();
             Console.Out.WriteLine($"Saving artifacts to {LayerPath}");
         }
+        
+        static string GetTemporaryDirectory()
+        {
+            var tempFolder = Path.GetTempFileName();
+            System.IO.File.Delete(tempFolder);
+            Directory.CreateDirectory(tempFolder);
+
+            return tempFolder;
+        }
 
         [HttpGet("{*path}")]
         public IActionResult GetFallback(string path)
@@ -93,7 +102,6 @@ namespace Controllers
         [HttpPost("{name}/blobs/uploads")]
         public IActionResult StartUpload(string name)
         {
-            var digest = Request.Query["digest"].FirstOrDefault();
             var guid = Guid.NewGuid().ToString();
             Response.Headers.Add("location", "/v2/" + name + "/blobs/uploads/" + guid);
             Response.Headers.Add("range", "0-0");
@@ -106,7 +114,6 @@ namespace Controllers
         [HttpPatch("{name}/blobs/uploads/{uuid}")]
         public async Task<IActionResult> Upload(string name, string uuid)
         {
-            var digest = Request.Query["digest"].FirstOrDefault();
             var start = Request.Headers["content-range"].FirstOrDefault()?.Split("-")[0] ?? "0";
             await using (var fs = System.IO.File.OpenWrite(LayerPath + "/" + uuid))
             {
@@ -146,9 +153,14 @@ namespace Controllers
         [HttpHead("{name}/manifests/{reference}")]
         public IActionResult ManifestExists(string name, string reference)
         {
+            var hash = reference.Split(":").Last();
             var path = LayerPath + "/" + name + "." + reference + ".json";
+            var hashPath = LayerPath + "/" + hash + ".json";
+            var testedPath = System.IO.File.Exists(path) ? path :
+                System.IO.File.Exists(hashPath) ? hashPath :
+                null;
 
-            if (System.IO.File.Exists(path))
+            if (testedPath != null)
             {
                 Response.Headers.Add("docker-content-digest", "sha256:" + Sha256Hash(path));
                 Response.Headers.Add("content-length", new FileInfo(path).Length.ToString());
@@ -229,15 +241,6 @@ namespace Controllers
             }
 
             return sb.ToString();
-        }
-        
-        static string GetTemporaryDirectory()
-        {
-            var tempFolder = Path.GetTempFileName();
-            System.IO.File.Delete(tempFolder);
-            Directory.CreateDirectory(tempFolder);
-
-            return tempFolder;
         }
     }
 }
