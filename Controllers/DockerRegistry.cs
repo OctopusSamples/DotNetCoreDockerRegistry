@@ -4,7 +4,6 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json.Linq;
 
@@ -13,60 +12,59 @@ namespace Controllers
     [Route("v2/")]
     public class DockerRegistry : ControllerBase
     {
-        const string LayerPath = "C:\\Temp\\layers";
+        private string LayerPath;
+
+        public DockerRegistry()
+        {
+            LayerPath = GetTemporaryDirectory();
+            Console.Out.WriteLine($"Saving artifacts to {LayerPath}");
+        }
 
         [HttpGet("{*path}")]
-        [AllowAnonymous]
         public IActionResult GetFallback(string path)
         {
             return NotFound();
         }
 
         [HttpPut("{*path}")]
-        [AllowAnonymous]
         public IActionResult PutFallback(string path)
         {
             return NotFound();
         }
 
         [HttpPost("{*path}")]
-        [AllowAnonymous]
         public IActionResult PostFallback(string path)
         {
             return NotFound();
         }
 
         [HttpPatch("{*path}")]
-        [AllowAnonymous]
         public IActionResult PatchFallback(string path)
         {
             return NotFound();
         }
 
         [HttpDelete("{*path}")]
-        [AllowAnonymous]
         public IActionResult DeleteFallback(string path)
         {
             return NotFound();
         }
 
         [HttpGet]
-        [AllowAnonymous]
         public IActionResult Root(string path)
         {
             return Ok();
         }
 
         [HttpHead("{name}/blobs/{digest}")]
-        [AllowAnonymous]
         public IActionResult Exists(string name, string digest)
         {
             var hash = digest.Split(":").Last();
 
             if (System.IO.File.Exists(LayerPath + "\\" + hash))
             {
-                Response.Headers.Add("Content-Length", new FileInfo(LayerPath + "\\" + hash).Length.ToString());
-                Response.Headers.Add("Docker-Content-Digest", digest);
+                Response.Headers.Add("content-length", new FileInfo(LayerPath + "\\" + hash).Length.ToString());
+                Response.Headers.Add("docker-content-digest", digest);
                 return Ok();
             }
 
@@ -74,7 +72,6 @@ namespace Controllers
         }
 
         [HttpGet("{name}/blobs/{digest}")]
-        [AllowAnonymous]
         public async Task<IActionResult> GetLayer(string name, string digest)
         {
             var hash = digest.Split(":").Last();
@@ -94,7 +91,6 @@ namespace Controllers
         }
 
         [HttpPost("{name}/blobs/uploads")]
-        [AllowAnonymous]
         public IActionResult StartUpload(string name)
         {
             var digest = Request.Query["digest"].FirstOrDefault();
@@ -107,7 +103,6 @@ namespace Controllers
         }
 
         [HttpPatch("{name}/blobs/uploads/{uuid}")]
-        [AllowAnonymous]
         public async Task<IActionResult> Upload(string name, string uuid)
         {
             var digest = Request.Query["digest"].FirstOrDefault();
@@ -125,12 +120,11 @@ namespace Controllers
         }
 
         [HttpPut("{name}/blobs/uploads/{uuid}")]
-        [AllowAnonymous]
         public async Task<IActionResult> FinishUpload(string name, string uuid)
         {
-            if (Request.Headers["Content-Length"].First() != "0")
+            if (Request.Headers["content-length"].First() != "0")
             {
-                var ranges = Request.Headers["Content-Range"].First().Split("-");
+                var ranges = Request.Headers["content-range"].First().Split("-");
                 using FileStream fs = System.IO.File.OpenWrite(LayerPath + "\\" + uuid);
                 fs.Seek(long.Parse(ranges[0]), SeekOrigin.Begin);
                 await Request.Body.CopyToAsync(fs);
@@ -139,14 +133,13 @@ namespace Controllers
             var rawDigest = Request.Query["digest"];
             var digest = Request.Query["digest"].First().Split(":").Last();
             System.IO.File.Move(LayerPath + "\\" + uuid, LayerPath + "\\" + digest);
-            Response.Headers.Add("Content-Length", "0");
-            Response.Headers.Add("Docker-Content-Digest", rawDigest);
+            Response.Headers.Add("content-length", "0");
+            Response.Headers.Add("docker-content-digest", rawDigest);
 
             return Created("/v2/" + name + "/blobs/" + digest, "");
         }
 
         [HttpHead("/v2/{name}/manifests/{reference}")]
-        [AllowAnonymous]
         public IActionResult ManifestExists(string name, string reference)
         {
             var path = LayerPath + "\\" + name + "." + reference + ".json";
@@ -168,7 +161,6 @@ namespace Controllers
         }
 
         [HttpGet("/v2/{name}/manifests/{reference}")]
-        [AllowAnonymous]
         public async Task<IActionResult> GetManifest(string name, string reference)
         {
             var hash = reference.Split(":").Last();
@@ -200,7 +192,6 @@ namespace Controllers
         }
 
         [HttpPut("/v2/{name}/manifests/{reference}")]
-        [AllowAnonymous]
         public async Task<IActionResult> SaveManifest(string name, string reference)
         {
             var path = LayerPath + "\\" + name + "." + reference + ".json";
@@ -218,23 +209,31 @@ namespace Controllers
             return Created($"/v2/{name}/manifests/{reference}", null);
         }
 
-        public static String Sha256Hash(string path)
+        string Sha256Hash(string path)
         {
-            StringBuilder sb = new StringBuilder();
+            var sb = new StringBuilder();
 
-            using (FileStream fileStream = System.IO.File.OpenRead(path))
+            using (var fileStream = System.IO.File.OpenRead(path))
             {
                 using (var hash = SHA256.Create())
                 {
-                    Encoding enc = Encoding.UTF8;
-                    Byte[] result = hash.ComputeHash(fileStream);
+                    var result = hash.ComputeHash(fileStream);
 
-                    foreach (Byte b in result)
+                    foreach (var b in result)
                         sb.Append(b.ToString("x2"));
                 }
             }
 
             return sb.ToString();
+        }
+        
+        string GetTemporaryDirectory()
+        {
+            var tempFolder = Path.GetTempFileName();
+            System.IO.File.Delete(tempFolder);
+            Directory.CreateDirectory(tempFolder);
+
+            return tempFolder;
         }
     }
 }
